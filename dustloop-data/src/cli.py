@@ -1,42 +1,44 @@
-from enum import Enum
 from pathlib import Path
 from typing_extensions import Annotated
 import typer
 from rich.console import Console
 from rich import print
-from typing import Final, Optional
+from typing import Final
+import requests
+
+from src.exceptions import CliException
+from src.action import Action
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
-
-class Action(Enum):
-    FIELDS = "cargofields"
-    QUERY = "cargoquery"
 
 DUSTLOOP_URL: Final[str] = "https://www.dustloop.com/wiki/api.php"
 
 def build_url(
         action: Action, 
         tables:str, 
-        fields: Optional[str] = None, 
-        limit: Optional[int] = None, 
-        offset: Optional[int] = None
+        fields:str = "", 
+        limit:int = 100, 
+        offset:int = 0
 ) -> str:
+    """Build the dustloop API url based on the action and param data."""
+    ret_url: str
+    if action == Action.FIELDS:
+        ret_url = (
+            f"{DUSTLOOP_URL}"
+            f"?action={action.value}"
+            f"&tables={tables}"
+            f"&format=json"
+        )
+    else:
+        ret_url = (
+            f"{DUSTLOOP_URL}"
+            f"?action={action.value}"
+            f"&tables={tables}&fields={fields}&limit={limit}&offset={offset}"
+            f"&format=json"
+        )
     
-    if action == Action.QUERY:
-    tables_param = f"&tables={tables}&fields={fields}" if fields is not None else f"&table={tables}"
-    limit_param = f"&limit={limit}" if limit is not None else ""
-    offset_param = f"&offset={offset}" if offset is not None else ""
-
-    res_url = (
-        f"{DUSTLOOP_URL}"
-        f"?action={action}"
-        f"{tables_param}"
-        f"{limit_param}"
-        f"{offset_param}"
-        f"&format=json"
-    )
-    return res_url
+    return ret_url
 
 
 @app.command("get-data")
@@ -51,9 +53,19 @@ def get_dustloop_data(
         path.mkdir(parents=True, exist_ok=True)
 
         fields_url = build_url(Action.FIELDS, "MoveData_GBVSR")
-        print(f"[green]fields_url: {fields_url}[/green]")
+        print(f"[green]Downloading API field definitions from {fields_url} ...[/green]")
+
+        fields_response = requests.get(fields_url)
+        fields_response.raise_for_status()
+        if "error" in fields_response.json():
+            raise CliException("Successful response back, but got an error", fields_url, fields_response.json()["error"]["info"])
+    except requests.exceptions.RequestException as e:
+        print(f"[red]Exception occurred when calling API:\n{str(e)}[/red]")
+    except CliException as e:
+        print(f"[red]Exception when calling the api: {str(e)}[/red]")
+        raise typer.Exit(1)
     except Exception as e:
-        print(f"[red]Error downloading API data: {str(e)}[/red]")
+        print(f"[red]Exception downloading API data: {str(e)}[/red]")
         raise typer.Exit(1)
 
 @app.command("upload-data")

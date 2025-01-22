@@ -5,6 +5,7 @@ description = "Scraper for Frame Data of games featured on https://www.dustloop.
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "requests>=2.32.3",
     "rich>=13.9.4",
     "sqlmodel>=0.0.22",
     "typer>=0.15.1",
