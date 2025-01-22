@@ -27,7 +27,7 @@ def build_url(
         ret_url = (
             f"{DUSTLOOP_URL}"
             f"?action={action.value}"
-            f"&tables={tables}"
+            f"&table={tables}"
             f"&format=json"
         )
     else:
@@ -48,6 +48,9 @@ def get_dustloop_data(
 ) -> None:
     """Download frame data from Dustloop's API."""
     
+    fields: str
+
+    # Get list of fields
     try:
         path = Path(output_dir)
         path.mkdir(parents=True, exist_ok=True)
@@ -57,8 +60,12 @@ def get_dustloop_data(
 
         fields_response = requests.get(fields_url)
         fields_response.raise_for_status()
-        if "error" in fields_response.json():
+        fields_data = fields_response.json()
+        if "error" in fields_data:
             raise CliException("Successful response back, but got an error", fields_url, fields_response.json()["error"]["info"])
+
+        print(fields_response.json())
+        fields = ",".join(fields_data['cargofields'].keys())
     except requests.exceptions.RequestException as e:
         print(f"[red]Exception occurred when calling API:\n{str(e)}[/red]")
     except CliException as e:
@@ -67,6 +74,10 @@ def get_dustloop_data(
     except Exception as e:
         print(f"[red]Exception downloading API data: {str(e)}[/red]")
         raise typer.Exit(1)
+    
+    print(fields)
+
+    # Get move info
 
 @app.command("upload-data")
 def upload_dustloop_data_to_database():
