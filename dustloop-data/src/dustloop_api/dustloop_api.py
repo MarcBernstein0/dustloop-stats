@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Final, List
+from typing import Any, Dict, Final, List
 import requests
 import typer
 from rich import print
@@ -41,12 +41,9 @@ def build_url(
     return ret_url
 
 
-def get_fields(table_name: str, output_dir: str) -> str:
+def get_fields(table_name: str, path: Path) -> str:
     """Get the fields/Schema of a Dustloop table"""
     try:
-        path = Path(output_dir)
-        path.mkdir(parents=True, exist_ok=True)
-
         fields_url = build_url(Action.FIELDS, table_name)
         print(f"[green]Downloading API field definitions from {fields_url} ...[/green]")
 
@@ -75,14 +72,22 @@ def get_fields(table_name: str, output_dir: str) -> str:
     except CliException as e:
         print(f"[red]Exception, could not parse fields data:\n{str(e)}[/red]")
         raise typer.Exit(1)
+    except json.JSONDecodeError as e:
+        print(f"[red]Failed to parse JSON response: {str(e)}[/red]")
+        # Save raw responses for inspection
+        raw_fields_file = path / "move_data_raw.txt"
+        with open(raw_fields_file, 'w', encoding='utf-8') as f:
+            f.write(fields_data.text)
+        print(f"[yellow]Saved raw responses to {raw_fields_file} for inspection[/yellow]")
+        raise typer.Exit(1)
     except Exception as e:
         print(f"[red]Exception that was not expected occurred when getting fields:\n{str(e)}[/red]")
         raise typer.Exit(1)
 
-def get_moves(table_name: str, fields: str, batch_size: int) -> List[str]:
+def get_moves(table_name: str, fields: str, batch_size: int, path: Path) -> List[Dict[Any, Any]]:
     """Get the move data from Dustloop API."""
     offset = 0
-    all_moves = []
+    all_moves: List[Dict[Any, Any]] = []
     is_done = False
 
     try:
@@ -110,21 +115,59 @@ def get_moves(table_name: str, fields: str, batch_size: int) -> List[str]:
                 all_moves.extend(current_batch)
 
                 # Update progress
-                progress.update(task, description=f"Downloaded {len(all_moves)} moves so far...")
+                progress.update(task, description=f"Downloaded ({len(all_moves)}) moves so far...")
 
                 # Check if there is more moves to get
                 is_done = len(current_batch) < batch_size
                 offset += batch_size
+        
+        final_data = {'cargoquery': all_moves}
+        move_data_file = path / f"{table_name}_moves.json"
+        with open(move_data_file, 'w', encoding='utf-8') as f:
+            json.dump(final_data, f, indent=2)
+    
+        print(f"[blue]Save {len(all_moves)} moves to {move_data_file}[/blue]")
     except requests.exceptions.HTTPError as e:
         print(f"[red]Exception occurred when calling API with status code {e.response.status_code}:\n{str(e)}[/red]")
         raise typer.Exit(1)
     except CliException as e:
         print(f"[red]Exception, could not parse move data:\n{str(e)}[/red]")
         raise typer.Exit(1)
+    except json.JSONDecodeError as e:
+        print(f"[red]Failed to parse JSON response: {str(e)}[/red]")
+        # Save raw responses for inspection
+        raw_data_file = path / "move_data_raw.txt"
+        with open(raw_data_file, 'w', encoding='utf-8') as f:
+            f.write(data_response.text)
+        print(f"[yellow]Saved raw responses to {raw_data_file} for inspection[/yellow]")
+        raise typer.Exit(1)
     except Exception as e:
         print(f"[red]Unexpected exception occurred when trying to get move data:\n{str(e)}")
         raise typer.Exit(1)
 
-    print(offset)
 
     return all_moves
+
+def clean_data(all_moves: List[Dict[Any, Any]], path: Path) -> Dict[Any, Any]:
+    """Take response data from dustloop and clean it up into a more structured data"""
+    ret_dict = {}
+    exclude_keys = set(["chara"])
+    for move in all_moves:
+        move_block = move["title"]
+        chara_name = move_block["chara"]
+
+        if chara_name not in ret_dict:
+            ret_dict[chara_name] = {
+                "name": chara_name, 
+                "normal": [],
+                "special": [],
+                "super": [],
+            }
+        if move_block["type"] == "normal":
+            ret_dict[chara_name]["normal"].append({k: move_block[k] for k in move_block if k not in exclude_keys})
+        elif move_block["type"] == "special":
+            ret_dict[chara_name]["special"].append({k: move_block[k] for k in move_block if k not in exclude_keys})
+        elif move_block["type"] == "super":
+            ret_dict[chara_name]["super"].append({k: move_block[k] for k in move_block if k not in exclude_keys})
+
+    return ret_dict

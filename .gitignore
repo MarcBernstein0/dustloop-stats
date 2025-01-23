@@ -55,3 +55,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# output
+dustloop-data/output/
