@@ -18,7 +18,7 @@ def get_dustloop_data(
     batch_size: Annotated[int, typer.Argument(help="Number of records to fetch per request")] = 500
 ) -> None:
     """Download frame data from Dustloop's API."""
-    table_name = "MoveData_GBVSR"
+    table_name = "MoveData_GGST"
 
     # Create output directories if none exist
     output_path = Path(output_dir)
