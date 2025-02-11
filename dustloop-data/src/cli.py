@@ -1,3 +1,4 @@
+from enum import Enum
 import json
 from pathlib import Path
 import time
@@ -6,11 +7,13 @@ import typer
 from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn, MofNCompleteColumn
 from rich.console import Console
 from rich import print
+from .db import db
 
 from .dustloop_api.dustloop_api import clean_data, get_fields, get_moves
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
+database: db = db()
 
 @app.command("get-data")
 def get_dustloop_data(
@@ -18,7 +21,7 @@ def get_dustloop_data(
     batch_size: Annotated[int, typer.Argument(help="Number of records to fetch per request")] = 500
 ) -> None:
     """Download frame data from Dustloop's API."""
-    table_name = "MoveData_GGST"
+    table_name = "MoveData_GGXRDR2"
 
     # Create output directories if none exist
     output_path = Path(output_dir)
@@ -72,8 +75,11 @@ def get_dustloop_data(
         raise typer.Exit(1)
     
     
+@app.command("init-db")
+def init_db() -> None:
+    """Initialize postgres db"""
+    database.init_db()
 
-    
 
 @app.command("upload-data")
 def upload_dustloop_data_to_database():
