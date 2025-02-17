@@ -1,14 +1,16 @@
 import os
 
+from models import SystemCoreData
 from sqlmodel import SQLModel, create_engine
-from .model.base_model import (
-    Character,
-)
 
 from .model.ggst.moves import (
     NormalMoves,
     SpecialMoves,
-    OverdriveMoves
+    OverdriveMoves,
+    SystemCoreData,
+    SystemJumpData,
+    GatlingModel,
+    CharacterSpecificModel
 )
 
 class db:
